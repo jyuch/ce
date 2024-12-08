@@ -18,9 +18,9 @@ struct Cli {
     sort: bool,
 }
 
-type DataFrameReader = fn(PathBuf) -> anyhow::Result<DataFrame>;
+type DataFrameReader = Box<dyn FnOnce(PathBuf) -> anyhow::Result<DataFrame>>;
 
-type DataFrameWriter = fn(&mut DataFrame, PathBuf) -> anyhow::Result<()>;
+type DataFrameWriter = Box<dyn FnOnce(&mut DataFrame, PathBuf) -> anyhow::Result<()>>;
 
 fn main() -> anyhow::Result<()> {
     let opt = Cli::parse();
@@ -28,9 +28,9 @@ fn main() -> anyhow::Result<()> {
     let reader: DataFrameReader = match opt.input.extension() {
         Some(in_ext) => {
             if in_ext == "csv" {
-                csv_reader
+                csv_reader()
             } else if in_ext == "parquet" {
-                parquet_reader
+                parquet_reader()
             } else {
                 panic!("Unsupported input file extension");
             }
@@ -43,9 +43,9 @@ fn main() -> anyhow::Result<()> {
     let writer: DataFrameWriter = match opt.output.extension() {
         Some(in_ext) => {
             if in_ext == "csv" {
-                csv_writer
+                csv_writer()
             } else if in_ext == "parquet" {
-                parquet_writer
+                parquet_writer()
             } else {
                 panic!("Unsupported output file extension");
             }
@@ -68,28 +68,36 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn csv_reader(path: PathBuf) -> anyhow::Result<DataFrame> {
-    let df = CsvReadOptions::default()
-        .try_into_reader_with_file_path(Some(path))?
-        .finish()?;
+fn csv_reader() -> DataFrameReader {
+    Box::new(|path: PathBuf| {
+        let df = CsvReadOptions::default()
+            .try_into_reader_with_file_path(Some(path))?
+            .finish()?;
 
-    Ok(df)
+        Ok(df)
+    })
 }
 
-fn csv_writer(df: &mut DataFrame, path: PathBuf) -> anyhow::Result<()> {
-    let mut file = File::create(path)?;
-    CsvWriter::new(&mut file).finish(df)?;
-    Ok(())
+fn csv_writer() -> DataFrameWriter {
+    Box::new(|df: &mut DataFrame, path: PathBuf| {
+        let mut file = File::create(path)?;
+        CsvWriter::new(&mut file).finish(df)?;
+        Ok(())
+    })
 }
 
-fn parquet_reader(path: PathBuf) -> anyhow::Result<DataFrame> {
-    let mut file = File::open(path)?;
-    let df = ParquetReader::new(&mut file).finish()?;
-    Ok(df)
+fn parquet_reader() -> DataFrameReader {
+    Box::new(|path: PathBuf| {
+        let mut file = File::open(path)?;
+        let df = ParquetReader::new(&mut file).finish()?;
+        Ok(df)
+    })
 }
 
-fn parquet_writer(df: &mut DataFrame, path: PathBuf) -> anyhow::Result<()> {
-    let mut file = File::create(path)?;
-    ParquetWriter::new(&mut file).finish(df)?;
-    Ok(())
+fn parquet_writer() -> DataFrameWriter {
+    Box::new(|df: &mut DataFrame, path: PathBuf| {
+        let mut file = File::create(path)?;
+        ParquetWriter::new(&mut file).finish(df)?;
+        Ok(())
+    })
 }
