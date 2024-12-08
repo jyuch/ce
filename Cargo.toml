@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.93", features = ["backtrace", "std"] }
-clap = { version = "4.5.21", features = ["derive"] }
-polars = { version = "0.44.2", features = ["dtype-full", "parquet"] }
+anyhow = { version = "1", features = ["backtrace", "std"] }
+clap = { version = "4", features = ["derive"] }
+polars = { version = "0.45", features = ["dtype-full", "parquet"] }
 
 [profile.release]
 codegen-units = 1
