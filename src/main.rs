@@ -1,21 +1,29 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use polars::prelude::*;
 use std::fs::File;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 struct Cli {
-    /// Input.
-    #[clap(short, long)]
-    input: PathBuf,
+    #[clap(subcommand)]
+    action: MainAction,
+}
 
-    /// Output.
-    #[clap(short, long)]
-    output: PathBuf,
-
-    /// Sort.
-    #[clap(short, long, default_value_t = false)]
-    sort: bool,
+#[derive(Subcommand, Debug)]
+enum MainAction {
+    /// Convert file format.
+    #[clap(name = "conv")]
+    Convert {
+        /// Input.
+        #[clap(short, long)]
+        input: PathBuf,
+        /// Output.
+        #[clap(short, long)]
+        output: PathBuf,
+        /// Sort.
+        #[clap(short, long, default_value_t = false)]
+        sort: bool,
+    },
 }
 
 type DataFrameReader = Box<dyn FnOnce(PathBuf) -> anyhow::Result<DataFrame>>;
@@ -25,47 +33,55 @@ type DataFrameWriter = Box<dyn FnOnce(&mut DataFrame, PathBuf) -> anyhow::Result
 fn main() -> anyhow::Result<()> {
     let opt = Cli::parse();
 
-    let reader: DataFrameReader = match opt.input.extension() {
-        Some(in_ext) => {
-            if in_ext == "csv" {
-                csv_reader()
-            } else if in_ext == "parquet" {
-                parquet_reader()
+    match opt.action {
+        MainAction::Convert {
+            input,
+            output,
+            sort,
+        } => {
+            let reader: DataFrameReader = match input.extension() {
+                Some(in_ext) => {
+                    if in_ext == "csv" {
+                        csv_reader()
+                    } else if in_ext == "parquet" {
+                        parquet_reader()
+                    } else {
+                        panic!("Unsupported input file extension");
+                    }
+                }
+                _ => {
+                    panic!("Unsupported input file extension");
+                }
+            };
+
+            let writer: DataFrameWriter = match output.extension() {
+                Some(in_ext) => {
+                    if in_ext == "csv" {
+                        csv_writer()
+                    } else if in_ext == "parquet" {
+                        parquet_writer()
+                    } else {
+                        panic!("Unsupported output file extension");
+                    }
+                }
+                _ => {
+                    panic!("Unsupported output file extension");
+                }
+            };
+
+            let df = reader(input.clone())?;
+
+            let mut df = if sort {
+                df.sort(df.get_column_names_str(), SortMultipleOptions::default())?
             } else {
-                panic!("Unsupported input file extension");
-            }
+                df
+            };
+
+            writer(&mut df, output.clone())?;
+
+            Ok(())
         }
-        _ => {
-            panic!("Unsupported input file extension");
-        }
-    };
-
-    let writer: DataFrameWriter = match opt.output.extension() {
-        Some(in_ext) => {
-            if in_ext == "csv" {
-                csv_writer()
-            } else if in_ext == "parquet" {
-                parquet_writer()
-            } else {
-                panic!("Unsupported output file extension");
-            }
-        }
-        _ => {
-            panic!("Unsupported output file extension");
-        }
-    };
-
-    let df = reader(opt.input.clone())?;
-
-    let mut df = if opt.sort {
-        df.sort(df.get_column_names_str(), SortMultipleOptions::default())?
-    } else {
-        df
-    };
-
-    writer(&mut df, opt.output.clone())?;
-
-    Ok(())
+    }
 }
 
 fn csv_reader() -> DataFrameReader {
