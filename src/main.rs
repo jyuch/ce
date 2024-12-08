@@ -98,7 +98,11 @@ fn parquet_reader() -> DataFrameReader {
 fn parquet_writer() -> DataFrameWriter {
     Box::new(|df: &mut DataFrame, path: PathBuf| {
         let mut file = File::create(path)?;
-        ParquetWriter::new(&mut file).finish(df)?;
+        ParquetWriter::new(&mut file)
+            .with_compression(ParquetCompression::Zstd(Some(
+                ZstdLevel::try_new(22).unwrap(/* zstd max level */),
+            )))
+            .finish(df)?;
         Ok(())
     })
 }
