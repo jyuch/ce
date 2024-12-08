@@ -71,6 +71,7 @@ fn main() -> anyhow::Result<()> {
 fn csv_reader() -> DataFrameReader {
     Box::new(|path: PathBuf| {
         let df = CsvReadOptions::default()
+            .with_infer_schema_length(None)
             .try_into_reader_with_file_path(Some(path))?
             .finish()?;
 
